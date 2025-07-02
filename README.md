@@ -27,8 +27,25 @@ Located in the `Warehouses/` directory - A Scala/Spark project for warehouse dat
 - Docker & Docker Compose
 - SBT Assembly Plugin
 
-### 2. [Second Project]
-Coming soon...
+### 2. Retweets Analysis
+Located in the `retweets/` directory - A Scala/Spark project for analyzing Twitter retweet patterns and waves.
+
+**Features:**
+- Processes Twitter data including messages, retweets, and user information
+- Supports both CSV and Avro file formats
+- Classifies retweets according to the needed waves (by now just the first 2)
+    * Wave 1: Direct retweet from a root tweet or post.
+    * Wave 2: Retweet from a wave 1 retweet.
+- Analyzes retweet waves and identifies top users by retweet count
+- Calculates retweet patterns for the first two waves of viral content
+- Runs on Docker-based Spark cluster with Avro support
+
+**Tech Stack:**
+- Apache Spark 4.0.0 with Avro support
+- Scala 2.13.16
+- Docker & Docker Compose
+- SBT Assembly Plugin
+- Apache Avro for data serialization
 
 ## Prerequisites
 
@@ -38,6 +55,60 @@ Before running any project, ensure you have:
 - **Java 11+**: For local development (Java 21+ recommended)
 - **SBT 1.11.2+**: Scala Build Tool
 - **Git**: For version control
+
+## Retweets Project - Quick Start
+
+### 1. Setup and Build
+
+```bash
+# Navigate to the Retweets project
+cd retweets/
+
+# Ensure Docker Desktop is running
+open -a Docker
+
+# Build the application JAR with assembly
+sbt clean assembly
+```
+
+### 2. Start Spark Cluster with Avro Support
+
+```bash
+# Start the Docker-based Spark cluster
+./start-spark-cluster.sh
+
+# Verify cluster is running
+docker ps
+```
+
+### 3. Run the Application
+
+```bash
+# Build and submit the job automatically
+./build-and-run.sh
+
+# OR submit manually:
+docker exec retweets-spark-master-1 /opt/spark/bin/spark-submit \
+--class com.Main \
+--master spark://spark-master:7077 \
+--packages org.apache.spark:spark-avro_2.13:4.0.0 \
+/opt/spark-apps/Retweets-assembly-0.1.0-SNAPSHOT.jar \
+message message_dir retweet user_dir avro
+```
+
+### 4. Monitor Results
+
+- **Spark Master UI**: http://localhost:8080
+- **Application UI**: http://localhost:4040 (when job is running)
+- **Output Files**: Check `data/output/` directory
+- **Open UIs**: Run `./open-spark-UIs.sh`
+
+### 5. Stop Cluster
+
+```bash
+# Stop the Spark cluster when done
+./stop-spark-cluster.sh
+```
 
 ## Warehouses Project - Quick Start
 
