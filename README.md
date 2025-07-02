@@ -95,6 +95,9 @@ docker exec retweets-spark-master-1 /opt/spark/bin/spark-submit \
 /opt/spark-apps/Retweets-assembly-0.1.0-SNAPSHOT.jar \
 message message_dir retweet user_dir avro
 ```
+- "message message_dir retweet user_dir avro" are the 5 parameters required to succesfully run the application.
+- Just pass the name of the 4 files and the format (csv or avro, all the files must be at the same format).
+- The program automatically fills the path (data/input) and the extension (.csv/.avro).
 
 ### 4. Monitor Results
 
@@ -109,6 +112,108 @@ message message_dir retweet user_dir avro
 # Stop the Spark cluster when done
 ./stop-spark-cluster.sh
 ```
+
+
+## Retweets Project Structure
+
+```
+retweets/
+├── build.sbt                    # SBT build configuration with Spark 4.0.0 and Avro dependencies
+├── project/
+│   ├── build.properties         # SBT version
+│   └── plugins.sbt             # SBT plugins (assembly)
+├── src/main/scala/com/
+│   ├── Main.scala              # Application entry point with command-line argument parsing
+│   ├── io/
+│   │   ├── DataReader.scala    # Handles reading CSV and Avro files with schema definitions
+│   │   └── DataWriter.scala    # Data writing utilities for CSV output
+│   └── processing/
+│       ├── DataManager.scala   # Main data processing orchestrator
+│       └── DataProcessing.scala # Core retweet wave analysis logic
+├── data/
+│   ├── input/                  # Input files (MESSAGE.csv/.avro, MESSAGE_DIR.csv/.avro, 
+│   │                           #              RETWEET.csv/.avro, USER_DIR.csv/.avro)
+│   └── output/                 # Generated analysis results
+├── docker-compose.yml          # Docker Spark 4.0.0 cluster configuration
+├── docker/
+│   ├── Dockerfile              # Spark 4.0.0 + Java 17 container definition
+│   └── start-spark.sh          # Spark cluster startup script
+├── spark-apps/                 # Directory for JAR files
+├── build-and-run.sh            # Automated build and submission script
+├── start-spark-cluster.sh      # Script to start cluster
+├── stop-spark-cluster.sh       # Script to stop cluster
+└── open-spark-UIs.sh          # Helper script to open web UIs
+```
+
+## Retweets Project Data Format
+
+#### Input Files
+
+**MESSAGE.csv / MESSAGE.avro:**
+```
+USER_ID,MESSAGE_ID
+204,1000
+267,1001
+153,1002
+...
+```
+- `USER_ID`: The original poster/tweeter ID
+- `MESSAGE_ID`: Unique identifier for the original tweet/message
+
+**MESSAGE_DIR.csv / MESSAGE_DIR.avro:**
+```
+MESSAGE_ID,TEXT
+1000,Message 1000
+1001,Message 1001
+1002,Message 1002
+...
+```
+- `MESSAGE_ID`: Links to MESSAGE table
+- `TEXT`: Content of the tweet/message (Note: Contains "NULL" values in sample data)
+
+**RETWEET.csv / RETWEET.avro:**
+```
+USER_ID,SUBSCRIBER_ID,MESSAGE_ID
+204,164,1000
+204,198,1000
+204,249,1000
+249,279,1000
+...
+```
+- `USER_ID`: The user being retweeted (original poster or previous retweeter)
+- `SUBSCRIBER_ID`: The user doing the retweet
+- `MESSAGE_ID`: The message being retweeted
+
+**USER_DIR.csv / USER_DIR.avro:**
+```
+USER_ID,FIRST_NAME,LAST_NAME
+1,Name1,Surname1
+2,Name2,Surname2
+3,Name3,Surname3
+...
+```
+- `USER_ID`: Unique user identifier
+- `FIRST_NAME`: User's first name
+- `LAST_NAME`: User's last name
+
+#### Output Files
+
+**Top Users by Retweets (CSV):**
+```
+USER_ID,FIRST_NAME,LAST_NAME,MESSAGE_ID,NUMBER_RETWEETS
+120,Name120,Surname120,1035,46
+232,Name232,Surname232,1049,43
+282,Name282,Surname282,1026,36
+...
+```
+- Analysis results showing users ranked by total retweet count in first two waves
+- Includes user information and the specific message that received the most retweets
+
+#### Wave Analysis Logic
+
+- **Wave 1**: Direct retweets from original posters (USER_ID matches MESSAGE.USER_ID)
+- **Wave 2**: Retweets of Wave 1 retweets (USER_ID matches Wave 1 SUBSCRIBER_ID)
+- The application currently analyzes only the first two waves of viral content spread
 
 ## Warehouses Project - Quick Start
 
@@ -182,7 +287,7 @@ sbt compile
 sbt "run data/input/amounts.csv data/input/positions.csv data/output/current-amounts data/output/stats"
 ```
 
-## Project Structure
+## Warehouses Project Structure
 
 ```
 Warehouses/
@@ -209,9 +314,9 @@ Warehouses/
 └── open-spark-UIs.sh          # Helper script to open web UIs
 ```
 
-## Data Format
+## Warehouses Project Data Format
 
-### Input Files
+#### Input Files
 
 **amounts.csv:**
 ```
@@ -229,7 +334,7 @@ positionId,warehouse,product,timePositionsUpdated
 ...
 ```
 
-### Output Files
+#### Output Files
 
 - **current-amounts/**: Latest amount for each position
 - **stats/**: Warehouse statistics (min, max, avg amounts by warehouse and product)
@@ -268,6 +373,68 @@ positionId,warehouse,product,timePositionsUpdated
    ```
    **Solution:** Make scripts executable: `chmod +x *.sh`
 
+### Retweets Project Specific Issues
+
+6. **Avro data source not found:**
+   ```bash
+   Failed to find data source: avro. Avro is built-in but external data source module since Spark 2.4
+   ```
+   **Solution:** Add Avro package to spark-submit:
+   ```bash
+   --packages org.apache.spark:spark-avro_2.13:4.0.0
+   ```
+
+7. **Java version compatibility with Spark 4.0.0:**
+   ```bash
+   UnsupportedClassVersionError: class file version 61.0, this version only recognizes up to 55.0
+   ```
+   **Solution:** Spark 4.0.0 requires Java 17+. Update Dockerfile to use:
+   ```dockerfile
+   FROM openjdk:17-jdk-slim as builder
+   ```
+
+8. **Spark 4.0.0 binary not found:**
+   ```bash
+   ERROR 404: Not Found - spark-4.0.0-bin-hadoop3.3-scala2.13.tgz
+   ```
+   **Solution:** Use correct binary filename for Spark 4.0.0:
+   ```bash
+   spark-4.0.0-bin-hadoop3.tgz  # Correct
+   # NOT: spark-4.0.0-bin-hadoop3.3-scala2.13.tgz
+   ```
+
+9. **Python package not available in container:**
+   ```bash
+   E: Unable to locate package python3-simpy
+   ```
+   **Solution:** Remove unnecessary Python packages from Dockerfile or use pip instead:
+   ```dockerfile
+   RUN apt-get install -y python3 python3-pip
+   RUN pip3 install simpy  # If needed
+   ```
+
+10. **Spark master container exits immediately:**
+    ```bash
+    Usage: Master [options]
+    ```
+    **Solution:** Check start script parameters and ensure proper environment variables are set
+
+11. **Harmless shutdown error:**
+    ```bash
+    java.nio.file.NoSuchFileException: hadoop-client-api-3.4.1.jar
+    ```
+    **Solution:** This is a harmless cleanup race condition. Application completed successfully - can be ignored.
+
+12. **Workers can't connect to master:**
+    ```bash
+    Failed to connect to master spark-master:7077
+    ```
+    **Solution:** Ensure master container is running and accessible:
+    ```bash
+    docker ps  # Check if master is running
+    docker compose logs spark-master  # Check master logs
+    ```
+
 ### Debugging
 
 - Check cluster status: `docker ps`
@@ -287,4 +454,3 @@ This repository is configured for development with:
 - Each project may have its own specific requirements and documentation
 - Spark applications can be submitted using `spark-submit` or run directly through SBT
 - Java version management is handled through jEnv for consistent development environment
-
